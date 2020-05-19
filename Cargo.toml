@@ -1,0 +1,11 @@
+[package]
+authors = ["MaidSafe Developers <dev@maidsafe.net>"]
+description = "Implementation of Farming in the SAFE Network."
+documentation = "https://docs.rs/safe-farming"
+edition = "2018"
+homepage = "https://maidsafe.net"
+license = "MIT OR BSD-3-Clause"
+name = "safe-farming"
+readme = "README.md"
+repository = "https://github.com/maidsafe/safe-farming"
+version = "0.0.1"
