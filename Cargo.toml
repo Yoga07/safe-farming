@@ -1,6 +1,6 @@
 [package]
 authors = ["MaidSafe Developers <dev@maidsafe.net>"]
-description = "Implementation of Farming in the SAFE Network."
+description = "Implementation of the reward scheme for the SAFE Network."
 documentation = "https://docs.rs/safe-farming"
 edition = "2018"
 homepage = "https://maidsafe.net"
@@ -8,4 +8,18 @@ license = "MIT OR BSD-3-Clause"
 name = "safe-farming"
 readme = "README.md"
 repository = "https://github.com/maidsafe/safe-farming"
-version = "0.0.1"
+version = "0.1.0"
+
+# [patch.crates-io]
+# safe-nd =  { git = "https://github.com/oetyng/safe-nd.git", rev = "2c16b8c" }
+
+[dependencies]
+# # Ensure bincode version is identical to that in SAFE Client Libs and SAFE Network Data.
+bincode = "=1.1.4"
+safe-nd = { git = "https://github.com/oetyng/safe-nd.git", branch = "at2-network-payments" }
+serde = { version = "~1.0.97", features = ["derive"] }
+crdts = { git = "https://github.com/rust-crdt/rust-crdt" }
+threshold_crypto = "~0.3.2"
+rand = "~0.7.3"
+
+[dev_dependencies]
