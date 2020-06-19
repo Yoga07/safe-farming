@@ -46,7 +46,10 @@ mod example;
 
 pub use self::accumulation::Accumulation;
 
-type Work = u64;
+/// The representation of the smallest unit of work.
+/// This is strictly incrementing (i.e. accumulated)
+/// during the network lifetime of the worker.
+pub type Work = u64;
 
 ///
 #[derive(Clone, Eq, PartialEq, PartialOrd, Debug, Ord)]

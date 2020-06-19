@@ -34,28 +34,45 @@ impl<A: RewardAlgo> FarmingSystem<A> {
     }
 
     /// Factor is a number > 0, by which reward will be increased or decreased.
+    /// When factor == 1, there is no scaling of the rewards.
+    /// When factor is > 1, the reward is scaled up.
+    /// When factor is < 1, the reward is scaled down.
     ///
-    /// Temp comments:
+    /// Temp comments for the SAFE Network farming context:
     ///
-    /// When factor is > 1, the StoreCost is topped up with the surplus
+    /// When factor is > 1, the StoreCost is - effectively - topped up with the surplus
     /// from section account, to form the total reward.
     /// This is essentially the same as a _net farming_, aka net issuance of money.
     ///
     /// When factor is < 1, the excess from the StoreCost
     /// stays at the section account.
     /// This is essentially the same as recycling money, moving it out of circulation.
+    ///
+    /// The factor is thus the adjustment of total supply in circulation vs total amount held by the network.
+    /// It's envisaged that the calculation of this factor, is where the crux of balancing the network economy is,
+    /// and where we will see changes due to tweaks, bug fixes, and improvements.
+    /// With other words: that is code that will change with a higher rate than this code, and is thus
+    /// separated out, for some other layer to deal with.
     pub fn reward(&mut self, data_hash: Vec<u8>, num_bytes: usize, factor: f64) -> Result<()> {
+        // first query for accumulated work of all
         let accounts_work: HashMap<AccountId, Work> = self
             .accumulation
             .get_all()
             .into_iter()
             .map(|(id, acc)| (*id, acc.work))
             .collect();
+        // calculate the work cost for the number of bytes to store
         let work_cost = self.farming_algo.work_cost(num_bytes);
+        // scale the reward by the factor
         let total_reward = self.farming_algo.total_reward(factor, work_cost);
+        // distribute according to previously performed work
         let distribution = self.farming_algo.distribute(total_reward, accounts_work);
 
+        // validate the operation
         let e = self.accumulation.accumulate(data_hash, distribution)?;
+
+        // apply the result, reward counter is now incremented
+        // i.e. both the reward amount and the work performed.
         Ok(self
             .accumulation
             .apply(AccumulationEvent::RewardsAccumulated(e)))
@@ -71,7 +88,7 @@ impl<A: RewardAlgo> FarmingSystem<A> {
 
 mod test {
     use super::{Accumulation, FarmingSystem};
-    use crate::calculation::BasicRewards;
+    use crate::calculation::StorageRewards;
     use safe_nd::{AccountId, Error, Money, PublicKey, Result};
     use threshold_crypto::SecretKey;
 
@@ -88,7 +105,7 @@ mod test {
         // --- Arrange ---
         let acc = Accumulation::new(Default::default(), Default::default());
         let base_cost = Money::from_nano(2);
-        let algo = BasicRewards::new(base_cost);
+        let algo = StorageRewards::new(base_cost);
         let mut system = FarmingSystem::new(algo, acc);
 
         let account = get_random_pk();
