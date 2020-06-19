@@ -28,6 +28,12 @@ pub struct BasicRewards {
     base_cost: Money,
 }
 
+impl BasicRewards {
+    pub fn new(base_cost: Money) -> Self {
+        Self { base_cost }
+    }
+}
+
 impl RewardAlgo for BasicRewards {
     /// Use this to update the cost,
     /// as per any desired formula and frequency.
@@ -77,13 +83,16 @@ impl RewardAlgo for BasicRewards {
         }
 
         shares
+            .into_iter()
+            .filter(|(_, s)| s > &Money::zero())
+            .collect()
     }
 }
 
-fn random_key<K: Eq + Hash, V>(hash: &HashMap<K, V>) -> Option<&K> {
-    if hash.is_empty() {
+fn random_key<K: Eq + Hash, V>(map: &HashMap<K, V>) -> Option<&K> {
+    if map.is_empty() {
         return None;
     }
-    let index = Range::new(0, hash.len()).sample(&mut rand::thread_rng());
-    hash.keys().skip(index).next()
+    let index = Range::new(0, map.len()).sample(&mut rand::thread_rng());
+    map.keys().skip(index).next()
 }

@@ -114,3 +114,52 @@ pub struct AccumulatedClaimed {
     ///
     pub accumulated: CurrentAccumulation,
 }
+
+mod test {
+    use super::{Accumulation, AccumulationEvent};
+    use safe_nd::{AccountId, Error, Money, PublicKey};
+    use threshold_crypto::SecretKey;
+
+    macro_rules! hashmap {
+        ($( $key: expr => $val: expr ),*) => {{
+             let mut map = ::std::collections::HashMap::new();
+             $( let _ = map.insert($key, $val); )*
+             map
+        }}
+    }
+
+    #[test]
+    fn when_data_was_not_previously_rewarded_reward_accumulates() {
+        // --- Arrange ---
+        let mut acc = Accumulation::new(Default::default(), Default::default());
+        let account = get_random_pk();
+        let data_hash = vec![1, 2, 3];
+        let reward = Money::from_nano(10);
+        let distribution = hashmap![account => reward];
+
+        // --- Act ---
+        // Try accumulate.
+        let result = acc.accumulate(data_hash.clone(), distribution.clone());
+
+        // --- Assert ---
+        // Confirm valid ..
+        match result {
+            Err(_) => assert!(false),
+            Ok(e) => {
+                assert!(e.distribution.len() == 1);
+                assert!(e.distribution.contains_key(&account));
+                assert_eq!(&reward, e.distribution.get(&account).unwrap());
+                acc.apply(AccumulationEvent::AmountsAccumulated(e));
+            }
+        }
+        // .. and successful.
+        match acc.get(&account) {
+            None => assert!(false),
+            Some(accumulated) => assert_eq!(accumulated.amount, reward),
+        }
+    }
+
+    fn get_random_pk() -> PublicKey {
+        PublicKey::from(SecretKey::random().public_key())
+    }
+}
