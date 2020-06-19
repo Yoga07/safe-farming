@@ -35,6 +35,10 @@ use std::collections::HashMap;
 //     farming::xx, farming::xx,
 // };
 
+/// Used for calculating the median
+/// of a vec of RewardCounters.
+pub mod utils;
+
 ///
 mod accumulation;
 mod calculation;
@@ -45,7 +49,7 @@ pub use self::accumulation::Accumulation;
 type Work = u64;
 
 ///
-#[derive(Clone, Eq, PartialEq, PartialOrd, Debug)]
+#[derive(Clone, Eq, PartialEq, PartialOrd, Debug, Ord)]
 pub struct RewardCounter {
     /// Accumulated rewards.
     /// This is reset every time the
