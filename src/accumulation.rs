@@ -7,8 +7,8 @@
 // permissions and limitations relating to use of the SAFE Network Software.
 
 use super::{
-    AccountAdded, AccountId, AccumulatedClaimed, AccumulationEvent, AmountsAccumulated,
-    CurrentAccumulation, WorkCounter,
+    AccountAdded, AccountId, AccumulationEvent, RewardCounter, RewardsAccumulated, RewardsClaimed,
+    Work,
 };
 use safe_nd::{Error, Money, Result};
 use std::collections::{HashMap, HashSet};
@@ -18,17 +18,14 @@ use std::collections::{HashMap, HashSet};
 /// is only rewarded once.
 pub struct Accumulation {
     idempotency: HashSet<Id>,
-    accumulated: HashMap<AccountId, CurrentAccumulation>,
+    accumulated: HashMap<AccountId, RewardCounter>,
 }
 
 pub type Id = Vec<u8>;
 
 impl Accumulation {
     /// ctor
-    pub fn new(
-        idempotency: HashSet<Id>,
-        accumulated: HashMap<AccountId, CurrentAccumulation>,
-    ) -> Self {
+    pub fn new(idempotency: HashSet<Id>, accumulated: HashMap<AccountId, RewardCounter>) -> Self {
         Self {
             idempotency,
             accumulated,
@@ -40,12 +37,12 @@ impl Accumulation {
     /// -----------------------------------------------------------------
 
     ///
-    pub fn get(&self, account: &AccountId) -> Option<&CurrentAccumulation> {
+    pub fn get(&self, account: &AccountId) -> Option<&RewardCounter> {
         self.accumulated.get(account)
     }
 
     ///
-    pub fn get_all(&self) -> &HashMap<AccountId, CurrentAccumulation> {
+    pub fn get_all(&self) -> &HashMap<AccountId, RewardCounter> {
         &self.accumulated
     }
 
@@ -53,11 +50,11 @@ impl Accumulation {
     /// ---------------------- Cmds -------------------------------------
     /// -----------------------------------------------------------------
 
-    pub fn add_account(&self, id: AccountId, worked: WorkCounter) -> Result<AccountAdded> {
+    pub fn add_account(&self, id: AccountId, work: Work) -> Result<AccountAdded> {
         if self.accumulated.contains_key(&id) {
             return Err(Error::BalanceExists);
         }
-        Ok(AccountAdded { id, worked })
+        Ok(AccountAdded { id, work })
     }
 
     ///
@@ -65,7 +62,7 @@ impl Accumulation {
         &self,
         id: Id,
         distribution: HashMap<AccountId, Money>,
-    ) -> Result<AmountsAccumulated> {
+    ) -> Result<RewardsAccumulated> {
         if self.idempotency.contains(&id) {
             return Err(Error::DataExists);
         }
@@ -77,17 +74,17 @@ impl Accumulation {
             };
         }
 
-        Ok(AmountsAccumulated { id, distribution })
+        Ok(RewardsAccumulated { id, distribution })
     }
 
     ///
-    pub fn claim(&self, account: AccountId) -> Result<AccumulatedClaimed> {
+    pub fn claim(&self, account: AccountId) -> Result<RewardsClaimed> {
         let result = self.accumulated.get(&account);
         match result {
             None => Err(Error::NoSuchKey),
-            Some(accumulated) => Ok(AccumulatedClaimed {
+            Some(rewards) => Ok(RewardsClaimed {
                 account,
-                accumulated: accumulated.clone(),
+                rewards: rewards.clone(),
             }),
         }
     }
@@ -103,13 +100,13 @@ impl Accumulation {
             AccountAdded(e) => {
                 let _ = self.accumulated.insert(
                     e.id,
-                    CurrentAccumulation {
-                        amount: Money::zero(),
-                        worked: e.worked,
+                    RewardCounter {
+                        reward: Money::zero(),
+                        work: e.work,
                     },
                 );
             }
-            AmountsAccumulated(e) => {
+            RewardsAccumulated(e) => {
                 for (id, amount) in e.distribution {
                     let existing = match self.accumulated.get(&id) {
                         None => Default::default(),
@@ -120,7 +117,7 @@ impl Accumulation {
                     let _ = self.accumulated.insert(id, accumulated);
                 }
             }
-            AccumulatedClaimed(e) => {
+            RewardsClaimed(e) => {
                 let _ = self.accumulated.remove(&e.account);
             }
         }
@@ -161,13 +158,13 @@ mod test {
                 assert!(e.distribution.len() == 1);
                 assert!(e.distribution.contains_key(&account));
                 assert_eq!(&reward, e.distribution.get(&account).unwrap());
-                acc.apply(AccumulationEvent::AmountsAccumulated(e));
+                acc.apply(AccumulationEvent::RewardsAccumulated(e));
             }
         }
         // .. and successful.
         match acc.get(&account) {
             None => assert!(false),
-            Some(accumulated) => assert_eq!(accumulated.amount, reward),
+            Some(accumulated) => assert_eq!(accumulated.reward, reward),
         }
     }
 
@@ -184,7 +181,7 @@ mod test {
         let reward = acc
             .accumulate(data_hash.clone(), distribution.clone())
             .unwrap();
-        acc.apply(AccumulationEvent::AmountsAccumulated(reward));
+        acc.apply(AccumulationEvent::RewardsAccumulated(reward));
 
         // --- Act ---
         // Try same data hash again ..
@@ -209,7 +206,7 @@ mod test {
         let accumulation = acc
             .accumulate(data_hash.clone(), distribution.clone())
             .unwrap();
-        acc.apply(AccumulationEvent::AmountsAccumulated(accumulation));
+        acc.apply(AccumulationEvent::RewardsAccumulated(accumulation));
 
         // --- Act + Assert ---
         // Try claim, confirm account and amount is correct.
@@ -218,8 +215,8 @@ mod test {
             Err(_) => assert!(false),
             Ok(e) => {
                 assert!(e.account == account);
-                assert!(e.accumulated.amount == reward);
-                acc.apply(AccumulationEvent::AccumulatedClaimed(e));
+                assert!(e.rewards.reward == reward);
+                acc.apply(AccumulationEvent::RewardsClaimed(e));
             }
         }
     }
@@ -234,11 +231,11 @@ mod test {
         let distribution = hashmap![account => reward];
 
         let accumulation = acc.accumulate(data_hash, distribution).unwrap();
-        acc.apply(AccumulationEvent::AmountsAccumulated(accumulation));
+        acc.apply(AccumulationEvent::RewardsAccumulated(accumulation));
 
         // Claim the account reward.
         let claim = acc.claim(account).unwrap();
-        acc.apply(AccumulationEvent::AccumulatedClaimed(claim));
+        acc.apply(AccumulationEvent::RewardsClaimed(claim));
 
         // --- Act ---
         // Try claim the account reward again ..
@@ -276,9 +273,9 @@ mod test {
         let reward = Money::from_nano(10);
         let distribution = hashmap![account => reward];
         let accumulation = acc.accumulate(data_hash, distribution).unwrap();
-        acc.apply(AccumulationEvent::AmountsAccumulated(accumulation));
+        acc.apply(AccumulationEvent::RewardsAccumulated(accumulation));
         let claim = acc.claim(account).unwrap();
-        acc.apply(AccumulationEvent::AccumulatedClaimed(claim));
+        acc.apply(AccumulationEvent::RewardsClaimed(claim));
 
         // --- Act ---
         // Try get the account reward.

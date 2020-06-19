@@ -42,36 +42,40 @@ mod example;
 
 pub use self::accumulation::Accumulation;
 
-type WorkCounter = u64;
+type Work = u64;
 
 ///
 #[derive(Clone, Eq, PartialEq, PartialOrd, Debug)]
-pub struct CurrentAccumulation {
-    ///
-    pub amount: Money,
-    ///
-    pub worked: WorkCounter,
+pub struct RewardCounter {
+    /// Accumulated rewards.
+    /// This is reset every time the
+    /// reward is paid out to the worker.
+    pub reward: Money,
+    /// Accumulated work.
+    /// This is strictly incrementing during
+    /// the network lifetime of the worker.
+    pub work: Work,
 }
 
-impl CurrentAccumulation {
+impl RewardCounter {
     ///
-    pub fn add(&self, amount: Money) -> Option<Self> {
-        let sum = match self.amount.checked_add(amount) {
+    pub fn add(&self, reward: Money) -> Option<Self> {
+        let sum = match self.reward.checked_add(reward) {
             Some(s) => s,
             None => return None,
         };
         Some(Self {
-            worked: self.worked + 1,
-            amount: sum,
+            work: self.work + 1,
+            reward: sum,
         })
     }
 }
 
-impl Default for CurrentAccumulation {
+impl Default for RewardCounter {
     fn default() -> Self {
         Self {
-            worked: 0,
-            amount: Money::zero(),
+            work: 0,
+            reward: Money::zero(),
         }
     }
 }
@@ -82,23 +86,24 @@ pub enum AccumulationEvent {
     ///
     AccountAdded(AccountAdded),
     ///
-    AmountsAccumulated(AmountsAccumulated),
+    RewardsAccumulated(RewardsAccumulated),
     ///
-    AccumulatedClaimed(AccumulatedClaimed),
+    RewardsClaimed(RewardsClaimed),
 }
 
 ///
 #[derive(Clone, Eq, PartialEq, Debug)]
 pub struct AccountAdded {
-    ///
+    /// The account id.
     pub id: AccountId,
-    ///
-    pub worked: WorkCounter,
+    /// Total work accumulated by the account owner.
+    pub work: Work,
 }
 
-///
+/// Reward and its distribution has been
+/// calculated, and accumulates with this event.
 #[derive(Clone, Eq, PartialEq, Debug)]
-pub struct AmountsAccumulated {
+pub struct RewardsAccumulated {
     /// An identifier of a rewarded "thing", such as a data hash for example.
     /// Makes sure we only accumulate a rewarded action _once_.
     pub id: Vec<u8>,
@@ -106,13 +111,16 @@ pub struct AmountsAccumulated {
     pub distribution: HashMap<AccountId, Money>,
 }
 
-///
+/// The accumulation of rewards stops at
+/// this instance of the Accumulator.
+/// The accumulated work is transfered to another instance,
+/// and the accumulated rewards is paid out.
 #[derive(Clone, Eq, PartialEq, PartialOrd, Debug)]
-pub struct AccumulatedClaimed {
+pub struct RewardsClaimed {
     ///
     pub account: AccountId,
     ///
-    pub accumulated: CurrentAccumulation,
+    pub rewards: RewardCounter,
 }
 
 mod test {
@@ -149,13 +157,13 @@ mod test {
                 assert!(e.distribution.len() == 1);
                 assert!(e.distribution.contains_key(&account));
                 assert_eq!(&reward, e.distribution.get(&account).unwrap());
-                acc.apply(AccumulationEvent::AmountsAccumulated(e));
+                acc.apply(AccumulationEvent::RewardsAccumulated(e));
             }
         }
         // .. and successful.
         match acc.get(&account) {
             None => assert!(false),
-            Some(accumulated) => assert_eq!(accumulated.amount, reward),
+            Some(accumulated) => assert_eq!(accumulated.reward, reward),
         }
     }
 

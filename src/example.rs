@@ -6,9 +6,7 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-use super::{
-    calculation::*, AccountId, Accumulation, AccumulationEvent, CurrentAccumulation, WorkCounter,
-};
+use super::{calculation::*, AccountId, Accumulation, AccumulationEvent, RewardCounter, Work};
 use safe_nd::Result;
 use std::collections::HashMap;
 
@@ -27,9 +25,11 @@ impl<A: RewardAlgo> FarmingSystem<A> {
         }
     }
 
-    /// The work counter
-    pub fn add_account(&mut self, id: AccountId, worked: WorkCounter) -> Result<()> {
-        let e = self.accumulation.add_account(id, worked)?;
+    /// Work is the total work associated with this account id.
+    /// It is a strictly incrementing value during the lifetime of
+    /// the owner on the network.
+    pub fn add_account(&mut self, id: AccountId, work: Work) -> Result<()> {
+        let e = self.accumulation.add_account(id, work)?;
         Ok(self.accumulation.apply(AccumulationEvent::AccountAdded(e)))
     }
 
@@ -45,26 +45,27 @@ impl<A: RewardAlgo> FarmingSystem<A> {
     /// stays at the section account.
     /// This is essentially the same as recycling money, moving it out of circulation.
     pub fn reward(&mut self, data_hash: Vec<u8>, num_bytes: usize, factor: f64) -> Result<()> {
-        let accounts_work: HashMap<AccountId, WorkCounter> = self
+        let accounts_work: HashMap<AccountId, Work> = self
             .accumulation
             .get_all()
             .into_iter()
-            .map(|(id, acc)| (*id, acc.worked))
+            .map(|(id, acc)| (*id, acc.work))
             .collect();
         let work_cost = self.farming_algo.work_cost(num_bytes);
         let total_reward = self.farming_algo.total_reward(factor, work_cost);
         let distribution = self.farming_algo.distribute(total_reward, accounts_work);
+
         let e = self.accumulation.accumulate(data_hash, distribution)?;
         Ok(self
             .accumulation
-            .apply(AccumulationEvent::AmountsAccumulated(e)))
+            .apply(AccumulationEvent::RewardsAccumulated(e)))
     }
 
-    pub fn claim(&mut self, id: AccountId) -> Result<CurrentAccumulation> {
+    pub fn claim(&mut self, id: AccountId) -> Result<RewardCounter> {
         let e = self.accumulation.claim(id)?;
         self.accumulation
-            .apply(AccumulationEvent::AccumulatedClaimed(e.clone()));
-        Ok(e.accumulated)
+            .apply(AccumulationEvent::RewardsClaimed(e.clone()));
+        Ok(e.rewards)
     }
 }
 
@@ -95,11 +96,11 @@ mod test {
 
         let num_bytes = 3;
         let factor = 2.0; // reward will be 2x StoreCost, where half is contributed by the network.
-        let worked = 1;
+        let work = 1;
 
         // --- Act ---
         // Try accumulate.
-        let _ = system.add_account(account, worked)?;
+        let _ = system.add_account(account, work)?;
         let _ = system.reward(data_hash, num_bytes, factor)?;
 
         // --- Assert ---
@@ -107,11 +108,11 @@ mod test {
             Err(_) => assert!(false),
             Ok(e) => {
                 // println!("Amount: {}", e.amount.as_nano());
-                // println!("Worked: {}", e.worked);
+                // println!("work: {}", e.work);
                 assert!(
-                    e.amount.as_nano() == factor as u64 * (num_bytes as u64 + base_cost.as_nano())
+                    e.reward.as_nano() == factor as u64 * (num_bytes as u64 + base_cost.as_nano())
                 );
-                assert!(e.worked == worked + 1);
+                assert!(e.work == work + 1);
             }
         }
         Ok(())

@@ -6,7 +6,7 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-use super::WorkCounter;
+use super::Work;
 use rand::distributions::{uniform::Uniform as Range, Distribution};
 use safe_nd::{AccountId, Money};
 use std::collections::HashMap;
@@ -19,7 +19,7 @@ pub trait RewardAlgo {
     fn distribute(
         &self,
         total_reward: Money,
-        accounts_work: HashMap<AccountId, WorkCounter>,
+        accounts_work: HashMap<AccountId, Work>,
     ) -> HashMap<AccountId, Money>;
 }
 
@@ -56,11 +56,11 @@ impl RewardAlgo for BasicRewards {
     fn distribute(
         &self,
         total_reward: Money,
-        accounts_work: HashMap<AccountId, WorkCounter>,
+        accounts_work: HashMap<AccountId, Work>,
     ) -> HashMap<AccountId, Money> {
         //
         let total_reward = total_reward.as_nano();
-        let all_work: WorkCounter = accounts_work.values().sum();
+        let all_work: Work = accounts_work.values().sum();
 
         let mut shares_sum = 0;
         let mut shares: HashMap<AccountId, Money> = Default::default();
