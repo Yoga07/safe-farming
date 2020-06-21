@@ -11,6 +11,10 @@ use safe_nd::Money;
 
 /// A util for calculating the median
 /// of a vec of RewardCounters.
+/// Implements Into<RewardCounter>, since
+/// the semantics of this set is that it
+/// basically represents a single value, which we
+/// derive by taking the median of the set.
 pub struct RewardCounterSet {
     counters: Vec<RewardCounter>,
 }
@@ -45,5 +49,14 @@ impl RewardCounterSet {
 impl Into<RewardCounterSet> for Vec<RewardCounter> {
     fn into(self) -> RewardCounterSet {
         RewardCounterSet { counters: self }
+    }
+}
+
+/// The semantics of RewardCounterSet is that it
+/// basically represents a single value, which we
+/// derive by taking the median of the set.
+impl Into<RewardCounter> for RewardCounterSet {
+    fn into(self) -> RewardCounter {
+        self.median()
     }
 }
