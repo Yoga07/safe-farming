@@ -27,6 +27,7 @@ pub trait RewardAlgo {
 }
 
 /// Cost of, and rewards for, storage.
+#[derive(Clone)]
 pub struct StorageRewards {
     base_cost: Money,
 }
@@ -71,28 +72,46 @@ impl RewardAlgo for StorageRewards {
         let all_work: Work = accounts_work.values().sum();
 
         let mut shares_sum = 0;
-        let mut shares: HashMap<AccountId, Money> = Default::default();
+        let mut shares: Vec<(AccountId, u64)> = Default::default();
 
         for (id, work) in &accounts_work {
             let share = total_reward / (all_work / work);
-            let _ = shares.insert(*id, Money::from_nano(share));
+            shares.push((*id, share));
             shares_sum += share;
         }
 
-        // covers probabilistic distribution as well
-        if total_reward > shares_sum {
-            if let Some(id) = random_key(&accounts_work) {
-                if let Some(share) = shares.get(&id) {
-                    let remainder = total_reward - shares_sum;
-                    let new_share = share.as_nano() + remainder;
-                    let _ = shares.insert(*id, Money::from_nano(new_share));
+        // Add/remove diff.
+        if total_reward > shares_sum { // covers probabilistic distribution as well
+            let index = Range::new(0, shares.len()).sample(&mut rand::thread_rng());
+            let (id, share) = shares[index];
+            let remainder = total_reward - shares_sum;
+            let new_share = share + remainder;
+            shares[index] = (id, new_share);
+        } else if shares_sum > total_reward {
+            let mut diff = shares_sum - total_reward;
+            shares.sort_by_key(|t| t.1);
+            while diff > 0 {
+                for i in 0..shares.len() {
+                    let (id, share) = shares[i];
+                    if 0 >= diff {
+                        break;
+                    } else if share > 1 {
+                        shares[i] = (id, share - 1);
+                        diff = diff - 1;
+                    }
                 }
             }
         }
 
+        let shares_sum = (&shares).into_iter().map(|(_, share)| share).sum();
+        if total_reward != shares_sum {
+            println!("total_reward: {}, shares_sum: {}", total_reward, shares_sum);
+        }
+
         shares
             .into_iter()
-            .filter(|(_, s)| s > &Money::zero())
+            .filter(|(_, s)| s > &0)
+            .map(|(i, s)| (i, Money::from_nano(s)))
             .collect()
     }
 }
