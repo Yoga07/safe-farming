@@ -16,6 +16,7 @@ use std::collections::{HashMap, HashSet};
 /// The book keeping of rewards.
 /// The business rule is that a piece of data
 /// is only rewarded once.
+#[derive(Clone)]
 pub struct Accumulation {
     idempotency: HashSet<Id>,
     accumulated: HashMap<AccountId, RewardCounter>,

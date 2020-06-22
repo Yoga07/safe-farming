@@ -29,22 +29,23 @@
 // For quick_error
 #![recursion_limit = "128"]
 
+pub use crate::{
+    accumulation::Accumulation,
+    calculation::{RewardAlgo, StorageRewards},
+    utils::RewardCounterSet,
+};
 use safe_nd::{AccountId, Money};
 use std::collections::HashMap;
-// pub use crate::{
-//     farming::xx, farming::xx,
-// };
 
+///
+pub mod accumulation;
+///
+pub mod calculation;
 /// Used for calculating the median
 /// of a vec of RewardCounters.
 pub mod utils;
 
-///
-mod accumulation;
-mod calculation;
 mod example;
-
-pub use self::accumulation::Accumulation;
 
 /// The representation of the smallest unit of work.
 /// This is strictly incrementing (i.e. accumulated)

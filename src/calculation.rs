@@ -81,7 +81,8 @@ impl RewardAlgo for StorageRewards {
         }
 
         // Add/remove diff.
-        if total_reward > shares_sum { // covers probabilistic distribution as well
+        if total_reward > shares_sum {
+            // covers probabilistic distribution as well
             let index = Range::new(0, shares.len()).sample(&mut rand::thread_rng());
             let (id, share) = shares[index];
             let remainder = total_reward - shares_sum;
@@ -114,12 +115,4 @@ impl RewardAlgo for StorageRewards {
             .map(|(i, s)| (i, Money::from_nano(s)))
             .collect()
     }
-}
-
-fn random_key<K: Eq + Hash, V>(map: &HashMap<K, V>) -> Option<&K> {
-    if map.is_empty() {
-        return None;
-    }
-    let index = Range::new(0, map.len()).sample(&mut rand::thread_rng());
-    map.keys().skip(index).next()
 }
