@@ -171,8 +171,8 @@ mod test {
     fn bft_rewards(factor: Factor) -> TestResult {
         println!("Test started.");
 
-        let all_work = AllWork::new();
-        let data_hashes = DataHashes::new();
+        let previous_work = PreviousWork::new();
+        let work_to_perform = WorkInfo::new();
 
         let base_cost = 1;
         // 1. We have 7 Elders.
@@ -181,7 +181,7 @@ mod test {
         println!("Elders generated.");
 
         let mut accounts = vec![];
-        for work in &all_work.values {
+        for work in &previous_work.values {
             let account = get_random_pk();
             accounts.push(account);
             for elder in &mut elders {
@@ -195,8 +195,8 @@ mod test {
         let _ = elders
             .par_iter_mut()
             .map(|elder| {
-                for hash in &data_hashes.values {
-                    reward(elder, hash.clone(), factor.value).unwrap();
+                for work_info in &work_to_perform.values {
+                    reward(elder, work_info.clone(), factor.value).unwrap();
                 }
             })
             .collect::<Vec<_>>();
@@ -204,13 +204,14 @@ mod test {
         println!("Rewards accumulated.");
 
         // The original reward will be aggregated.
-        let total_reward: f64 = (&data_hashes.values)
+        let total_reward: f64 = (&work_to_perform.values)
             .into_iter()
-            .map(|hash| factor.value * (base_cost as f64 + hash.len() as f64))
+            .map(|(_, numbytes)| factor.value * (base_cost as f64 + numbytes.value as f64))
             .sum();
         let total_reward = total_reward as u64;
-        let total_work: u64 = (all_work.values.len() as u64 * data_hashes.values.len() as u64)
-            + all_work.values.into_iter().sum::<u64>();
+        let total_work: u64 = (previous_work.values.len() as u64
+            * work_to_perform.values.len() as u64)
+            + previous_work.values.into_iter().sum::<u64>();
 
         let mut total_agreed_rewards = 0;
         let mut total_agreed_work = 0;
@@ -247,10 +248,10 @@ mod test {
         // Assert that the difference is within tolerance levels.
         // (Assert that the byzantine faults introduce no
         // difference.)
-        let decimals = 2;
+        let decimals = 1;
         let expected_diff = 0.0;
-        assert_eq!(expected_diff, round(reward_diff_percent, decimals)); // diff of reward shall be less than 0.01 %
-        assert_eq!(expected_diff, round(work_diff_percent, decimals)); // diff of work shall be less than 0.01 %
+        assert_eq!(expected_diff, round(reward_diff_percent, decimals)); // diff of reward shall be less than 0.1 %
+        assert_eq!(expected_diff, round(work_diff_percent, decimals)); // diff of work shall be less than 0.1 %
 
         TestResult::passed()
     }
@@ -266,9 +267,9 @@ mod test {
         FarmingSystem::new(algo, acc)
     }
 
-    fn reward(instance: &mut Elder, data_hash: Vec<u8>, factor: f64) -> Result<()> {
-        let num_bytes = data_hash.len();
-        instance.reward(data_hash, num_bytes, factor)
+    fn reward(instance: &mut Elder, data_info: (Hash, NumBytes), factor: f64) -> Result<()> {
+        let (hash, num_bytes) = data_info;
+        instance.reward(hash.value, num_bytes.value as usize, factor)
     }
 
     fn diff(one: u64, two: u64) -> f64 {
@@ -322,11 +323,11 @@ mod test {
     }
 
     #[derive(Clone, Debug)]
-    struct AllWork {
+    struct PreviousWork {
         pub values: Vec<u64>,
     }
 
-    impl AllWork {
+    impl PreviousWork {
         pub fn new() -> Self {
             let mut rng = rand::thread_rng();
             let values: Vec<u64> = (0..rng.gen_range(160, 200))
@@ -340,23 +341,39 @@ mod test {
     }
 
     #[derive(Clone, Debug)]
-    struct DataHashes {
-        pub values: Vec<Vec<u8>>,
+    struct WorkInfo {
+        pub values: Vec<(Hash, NumBytes)>,
     }
 
-    impl DataHashes {
+    #[derive(Clone, Debug)]
+    struct Hash {
+        pub value: Vec<u8>,
+    }
+
+    #[derive(Clone, Debug)]
+    struct NumBytes {
+        pub value: u64,
+    }
+
+    impl WorkInfo {
         pub fn new() -> Self {
             let mut rng = rand::thread_rng();
             // 10-15 data uploads (and reward instances)
-            let values: Vec<Vec<u8>> = (0..rng.gen_range(10, 15))
+            let values: Vec<(Hash, NumBytes)> = (0..rng.gen_range(10, 15))
                 .map(|_| {
-                    // 3 kb (inclusive) to 1001 kb (exclusive)
-                    (0..rng.gen_range(3000, 1000001))
+                    // 256 byte hash
+                    let hash = (0..256)
                         .map(|_| {
                             // 0 (inclusive) to 255 (exclusive)
                             rng.gen_range(0, 255)
                         })
-                        .collect()
+                        .collect();
+                    (
+                        Hash { value: hash },
+                        NumBytes {
+                            value: rng.gen_range(3000, 1000001), // 3 kb (inclusive) to 1001 kb (exclusive)
+                        },
+                    )
                 })
                 .collect();
             Self { values }
