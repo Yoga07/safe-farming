@@ -94,7 +94,7 @@ mod test {
     use rand::{Rng, RngCore};
     use rayon::prelude::*;
     use safe_nd::{Money, PublicKey, Result};
-    use std::collections::HashSet;
+    use std::collections::{HashMap, HashSet};
     use threshold_crypto::SecretKey;
 
     /// Test description
@@ -118,7 +118,7 @@ mod test {
     /// B. Even with the honest nodes being a bit out of synch, the reward will converge to a correct amount.
     ///
     /// NB: There is currently a small deviance of less than
-    /// 0.001 % occurring due to the calculation logic, i.e. _not_ as a result of the byzantine faults.
+    /// 0.01 % occurring due to the calculation logic, i.e. _not_ as a result of the byzantine faults.
 
     macro_rules! hashmap {
         ($( $key: expr => $val: expr ),*) => {{
@@ -165,10 +165,106 @@ mod test {
 
     #[test]
     fn quickcheck_bft_rewards() {
-        quickcheck(bft_rewards as fn(Factor) -> TestResult);
+        quickcheck(bft_rewards_quickcheck as fn(Factor) -> TestResult);
     }
 
-    fn bft_rewards(factor: Factor) -> TestResult {
+    #[test]
+    fn test_position() {
+        let number = 0.00056_f64;
+        let log10 = number.log10();
+        let position = log10.floor();
+        assert_eq!(-4.0, position); // fourth decimal position
+
+        let number = 5000.00056_f64;
+        let log10 = number.log10();
+        let position = log10.ceil();
+        assert_eq!(4.0, position); // fourth position of integers
+    }
+
+    /// Add results to buckets, assert that
+    /// enough results fall into the range of buckets we want
+    /// and optionally that we don't have too many results of some sort
+    /// in undesired ranges.
+    #[test]
+    fn verify_reward_bft_tolerances() -> Result<()> {
+        let mut rng = rand::thread_rng();
+        let mut reward_buckets = HashMap::<isize, u64>::new();
+        let mut work_buckets = HashMap::<isize, u64>::new();
+
+        let iters = 40;
+        for i in (0..iters) {
+            let value = rng.gen_range(0.67, 2.7);
+            let factor = Factor::new(value);
+            let data = bft_rewards(factor)?;
+            increment(data.reward_diff_percent, &mut reward_buckets);
+            increment(data.work_diff_percent, &mut work_buckets);
+        }
+
+        //// Reward deviance
+        assert_tolerance(&reward_buckets, iters, -3, 1.0); // 100 % of the time, we have less than 0.01 % diff
+        assert_tolerance(&reward_buckets, iters, -4, 0.89);
+        assert_tolerance(&reward_buckets, iters, -5, 0.87); // check .88
+        assert_tolerance(&reward_buckets, iters, -6, 0.1); // last failed was 0.4
+
+        //// Work deviance
+        assert_tolerance(&work_buckets, iters, -3, 1.0); // 100 % of the time, we have less than 0.01 % diff
+        assert_tolerance(&work_buckets, iters, -4, 0.94); // last passed was .94
+        assert_tolerance(&work_buckets, iters, -5, 0.88); // 88 % of the time, we have less than 0.0001 % diff
+        assert_tolerance(&work_buckets, iters, -6, 0.83); // last failed was 0.85
+
+        Ok(())
+    }
+
+    fn increment(outcome: f64, bucket: &mut HashMap<isize, u64>) {
+        let log10 = outcome.log10();
+        let position = log10.floor() as isize;
+        let next_value = match bucket.get(&position) {
+            Some(v) => v + 1,
+            None => 1,
+        };
+        let _ = bucket.insert(position, next_value);
+    }
+
+    fn assert_tolerance(
+        occurrences: &HashMap<isize, u64>,
+        total: u64,
+        precision: isize,
+        tolerance: f64,
+    ) {
+        let ge_precision = occurrences
+            .into_iter()
+            .filter(|(p, _)| *p <= &precision)
+            .map(|(_, count)| count)
+            .sum::<u64>() as f64
+            / total as f64;
+        let within_tolerance = ge_precision >= tolerance;
+        assert_eq!(within_tolerance, true);
+    }
+
+    fn bft_rewards_quickcheck(factor: Factor) -> TestResult {
+        match bft_rewards(factor) {
+            Ok(result) => {
+                // Assert that the difference is within tolerance levels.
+                // (Assert that the byzantine faults introduce no
+                // difference.)
+                let decimals = 1;
+                let expected_diff = 0.0;
+                let acceptble_work_diff =
+                    expected_diff == round(result.work_diff_percent, decimals); // diff of work shall be less than 0.1 %
+                let acceptable_reward_diff =
+                    expected_diff == round(result.reward_diff_percent, decimals); // diff of reward shall be less than 0.1 %
+
+                if acceptble_work_diff && acceptable_reward_diff {
+                    TestResult::passed()
+                } else {
+                    TestResult::failed()
+                }
+            }
+            Err(_) => TestResult::failed(),
+        }
+    }
+
+    fn bft_rewards(factor: Factor) -> Result<RewardResults> {
         println!("Test started.");
 
         let previous_work = PreviousWork::new();
@@ -245,15 +341,14 @@ mod test {
         // There are also intermittent small diffs in work.
         // TODO: Look up what exactly causes this.
 
-        // Assert that the difference is within tolerance levels.
-        // (Assert that the byzantine faults introduce no
-        // difference.)
-        let decimals = 1;
-        let expected_diff = 0.0;
-        assert_eq!(expected_diff, round(reward_diff_percent, decimals)); // diff of reward shall be less than 0.1 %
-        assert_eq!(expected_diff, round(work_diff_percent, decimals)); // diff of work shall be less than 0.1 %
-
-        TestResult::passed()
+        Ok(RewardResults {
+            total_reward,
+            total_agreed_rewards,
+            total_work,
+            total_agreed_work,
+            reward_diff_percent,
+            work_diff_percent,
+        })
     }
 
     fn get_random_pk() -> PublicKey {
@@ -306,9 +401,24 @@ mod test {
     ///  ------------------------ Test structs ---------------------------------
     /// -------------------------------------------------------------------------
 
+    struct RewardResults {
+        total_reward: u64,
+        total_agreed_rewards: u64,
+        total_work: u64,
+        total_agreed_work: u64,
+        reward_diff_percent: f64,
+        work_diff_percent: f64,
+    }
+
     #[derive(Clone, Debug)]
     struct Factor {
         pub value: f64,
+    }
+
+    impl Factor {
+        pub fn new(value: f64) -> Self {
+            Self { value }
+        }
     }
 
     impl Arbitrary for Factor {
@@ -318,7 +428,7 @@ mod test {
         {
             let mut rng = rand::thread_rng();
             let value = rng.gen_range(0.67, 2.7);
-            Self { value }
+            Self::new(value)
         }
     }
 
