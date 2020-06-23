@@ -165,19 +165,18 @@ mod test {
 
     #[test]
     fn quickcheck_bft_rewards() {
-        quickcheck(bft_rewards as fn(Factor, AllWork, DataHashes) -> TestResult);
+        quickcheck(bft_rewards as fn(Factor) -> TestResult);
     }
 
-    fn bft_rewards(factor: Factor, all_work: AllWork, data_hashes: DataHashes) -> TestResult {
+    fn bft_rewards(factor: Factor) -> TestResult {
         println!("Test started.");
+
+        let all_work = AllWork::new();
+        let data_hashes = DataHashes::new();
 
         let base_cost = 1;
         // 1. We have 7 Elders.
-        let indices: Vec<u8> = vec![0, 1, 2, 3, 4, 5, 6];
-        let mut elders: Vec<(u8, Elder)> = indices
-            .into_iter()
-            .map(|i| (i, get_instance(base_cost)))
-            .collect();
+        let mut elders: Vec<Elder> = (0..7).map(|i| get_instance(base_cost)).collect();
 
         println!("Elders generated.");
 
@@ -185,7 +184,7 @@ mod test {
         for work in &all_work.values {
             let account = get_random_pk();
             accounts.push(account);
-            for (_, elder) in &mut elders {
+            for elder in &mut elders {
                 elder.add_account(account, *work).unwrap();
             }
         }
@@ -195,7 +194,7 @@ mod test {
         // 2. We will issue n rewards.
         let _ = elders
             .par_iter_mut()
-            .map(|(_, elder)| {
+            .map(|elder| {
                 for hash in &data_hashes.values {
                     reward(elder, hash.clone(), factor.value).unwrap();
                 }
@@ -222,7 +221,7 @@ mod test {
         for account in accounts {
             let counters: Vec<RewardCounter> = (&mut elders)
                 .iter_mut()
-                .map(|(_, elder)| elder.claim(account).unwrap())
+                .map(|elder| elder.claim(account).unwrap())
                 .collect();
             let counters: RewardCounterSet = apply_byzantine_faults(counters).into();
             let agreed_counter: RewardCounter = counters.into();
@@ -241,16 +240,17 @@ mod test {
         println!("work diff: {:.6} %", work_diff_percent);
         println!("-------");
 
-        // NB: The small diffs we see in rewards are not due to the byzantine faults, but due to the reward calculation.
+        // NB: The small diffs we always see in rewards, are not due to the byzantine faults, but due to the reward calculation.
+        // There are also intermittent small diffs in work.
         // TODO: Look up what exactly causes this.
 
         // Assert that the difference is within tolerance levels.
         // (Assert that the byzantine faults introduce no
         // difference.)
-        let decimals = 3;
+        let decimals = 2;
         let expected_diff = 0.0;
-        // assert_eq!(expected_diff, round(reward_diff_percent, decimals));  // diff of reward shall be less than 0.001 %
-        // assert_eq!(expected_diff, work_diff_percent); // diff of work shall be exactly 0 %
+        assert_eq!(expected_diff, round(reward_diff_percent, decimals)); // diff of reward shall be less than 0.01 %
+        assert_eq!(expected_diff, round(work_diff_percent, decimals)); // diff of work shall be less than 0.01 %
 
         TestResult::passed()
     }
@@ -291,14 +291,14 @@ mod test {
         while max_byzantine > byzantine_elders.len() {
             let _ = byzantine_elders.insert(rng.gen_range(0, counters.len()));
         }
-        let mut attacked_counters = counters;
+        let mut faulty_counters = counters;
         for i in byzantine_elders {
-            attacked_counters[i] = RewardCounter {
+            faulty_counters[i] = RewardCounter {
                 reward: Money::from_nano(rng.next_u64()), // wildly wrong/dishonest
                 work: rng.next_u64(),                     // wildly wrong/dishonest
             };
         }
-        attacked_counters
+        faulty_counters
     }
 
     /// -------------------------------------------------------------------------
@@ -326,11 +326,8 @@ mod test {
         pub values: Vec<u64>,
     }
 
-    impl Arbitrary for AllWork {
-        fn arbitrary<G>(_: &mut G) -> Self
-        where
-            G: crdts::quickcheck::Gen,
-        {
+    impl AllWork {
+        pub fn new() -> Self {
             let mut rng = rand::thread_rng();
             let values: Vec<u64> = (0..rng.gen_range(160, 200))
                 .map(|_| {
@@ -347,11 +344,8 @@ mod test {
         pub values: Vec<Vec<u8>>,
     }
 
-    impl Arbitrary for DataHashes {
-        fn arbitrary<G>(_: &mut G) -> Self
-        where
-            G: crdts::quickcheck::Gen,
-        {
+    impl DataHashes {
+        pub fn new() -> Self {
             let mut rng = rand::thread_rng();
             // 10-15 data uploads (and reward instances)
             let values: Vec<Vec<u8>> = (0..rng.gen_range(10, 15))
