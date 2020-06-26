@@ -10,15 +10,21 @@ use super::Work;
 use rand::distributions::{uniform::Uniform as Range, Distribution};
 use safe_nd::{AccountId, Money};
 use std::collections::HashMap;
-use std::hash::Hash;
 
 /// This algo allows for setting a base cost together with a
 /// cost proportional to some work, as measured by a minimum work unit.
 
 pub trait RewardAlgo {
+    /// Set the base cost of work.
     fn set(&mut self, base_cost: Money);
+    /// Get the cost of work for the specified number of units.
     fn work_cost(&self, work_units: usize) -> Money;
+    /// Get the total reward implied by the work cost,
+    /// as scaled by a factor representing a function of parameters
+    /// relevant to the implementing layer.
     fn total_reward(&self, factor: f64, work_cost: Money) -> Money;
+    /// Returns the distribution of the total_reward, between
+    /// the accounts supplied, proportionally to their accumulated work.
     fn distribute(
         &self,
         total_reward: Money,
@@ -33,6 +39,7 @@ pub struct StorageRewards {
 }
 
 impl StorageRewards {
+    ///
     pub fn new(base_cost: Money) -> Self {
         Self { base_cost }
     }
@@ -53,7 +60,10 @@ impl RewardAlgo for StorageRewards {
     }
 
     /// Use the factor to scale
-    /// the reward per any desired formula.
+    /// the reward per any desired function of parameters
+    /// relevant to the implementing layer.
+    /// In SAFE Network context, the factor could be the
+    /// output of a function of node count, section count, percent filled etc. etc.
     fn total_reward(&self, factor: f64, work_cost: Money) -> Money {
         let amount = factor * work_cost.as_nano() as f64;
         Money::from_nano(amount as u64)
@@ -82,7 +92,8 @@ impl RewardAlgo for StorageRewards {
 
         // Add/remove diff.
         if total_reward > shares_sum {
-            // covers probabilistic distribution as well
+            // covers probabilistic distribution as well,
+            // i.e. when total_reward < number of accounts.
             let index = Range::new(0, shares.len()).sample(&mut rand::thread_rng());
             let (id, share) = shares[index];
             let remainder = total_reward - shares_sum;

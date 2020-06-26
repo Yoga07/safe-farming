@@ -53,8 +53,10 @@ impl Into<RewardCounterSet> for Vec<RewardCounter> {
 }
 
 /// The semantics of RewardCounterSet is that it
-/// basically represents a single value, which we
-/// derive by taking the median of the set.
+/// basically represents a single value, as perceived
+/// by a fix set of different actors working as a group.
+/// We get the agreed value, by taking the median of the set.
+/// With at least 2/3 correctly working actors (e2e), we are ensured BFT.
 impl Into<RewardCounter> for RewardCounterSet {
     fn into(self) -> RewardCounter {
         self.median()

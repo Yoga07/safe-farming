@@ -53,6 +53,11 @@ impl<A: RewardAlgo> FarmingSystem<A> {
     /// and where we will see changes due to tweaks, bug fixes, and improvements.
     /// With other words: that is code that will change with a higher rate than this code, and is thus
     /// separated out, for some other layer to deal with.
+    ///
+    /// The factor is the output of a function of parameters
+    /// relevant to the implementing layer.
+    /// In SAFE Network context, those parameters could be node count,
+    /// section count, percent filled etc. etc.
     pub fn reward(&mut self, data_hash: Vec<u8>, num_bytes: usize, factor: f64) -> Result<()> {
         // first query for accumulated work of all
         let accounts_work: HashMap<AccountId, Work> = self
@@ -114,11 +119,9 @@ mod test {
     /// the same, as the aggregated original rewards, i.e. they will not have drifted.
     ///
     /// This will prove that:
-    /// A. With a majority of honest nodes, the reward will be correct.
-    /// B. Even with the honest nodes being a bit out of synch, the reward will converge to a correct amount.
+    /// A. With a majority of (E2E) correctly working nodes, the reward will be correct.
+    /// B. Even with the correct nodes being a bit out of synch, the reward will converge to a correct amount.
     ///
-    /// NB: There is currently a small deviance of less than
-    /// 0.01 % occurring due to the calculation logic, i.e. _not_ as a result of the byzantine faults.
 
     macro_rules! hashmap {
         ($( $key: expr => $val: expr ),*) => {{
@@ -199,8 +202,7 @@ mod test {
 
         let iters = 100;
         for i in (0..iters) {
-            let value = rng.gen_range(0.67, 2.7);
-            let factor = Factor::new(value);
+            let factor = Factor::new(rng.gen_range(0.67, 2.7)); // factors between 0 and 1 give more deviance than between 1 and 100 for example, due to rounding errors
             let data = simulate_random_rewards_with_byzantine_faults(factor)?;
             record_result(data.reward_diff_percent, &mut reward_buckets);
             record_result(data.work_diff_percent, &mut work_buckets);
@@ -239,7 +241,7 @@ mod test {
     }
 
     // We find out how often we see the distinct outcomes for the test parameters.
-    // So if we have the two outcomes 0.04and 0.001 (%), then
+    // So if we have the two outcomes 0.04 and 0.001 (%), then
     // - 100% of the time, the deviance is less than 0.1 %.
     // - 50% of the time, the deviance is less than 0.01 %.
     fn find_distribution(num_cases: u64, outcomes: HashMap<isize, u64>) -> HashMap<isize, f64> {
