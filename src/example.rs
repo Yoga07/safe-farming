@@ -58,7 +58,12 @@ impl<A: RewardAlgo> FarmingSystem<A> {
     /// relevant to the implementing layer.
     /// In SAFE Network context, those parameters could be node count,
     /// section count, percent filled etc. etc.
-    pub fn reward(&mut self, data_hash: Vec<u8>, num_bytes: usize, factor: f64) -> Result<()> {
+    pub fn reward(
+        &mut self,
+        data_hash: Vec<u8>,
+        num_bytes: u64,
+        factor: f64,
+    ) -> Result<safe_nd::Money> {
         // first query for accumulated work of all
         let accounts_work: HashMap<AccountId, Work> = self
             .accumulation
@@ -78,9 +83,10 @@ impl<A: RewardAlgo> FarmingSystem<A> {
 
         // apply the result, reward counter is now incremented
         // i.e. both the reward amount and the work performed.
-        Ok(self
-            .accumulation
-            .apply(AccumulationEvent::RewardsAccumulated(e)))
+        self.accumulation
+            .apply(AccumulationEvent::RewardsAccumulated(e));
+
+        Ok(total_reward)
     }
 
     pub fn claim(&mut self, id: AccountId) -> Result<RewardCounter> {
@@ -122,14 +128,6 @@ mod test {
     /// A. With a majority of (E2E) correctly working nodes, the reward will be correct.
     /// B. Even with the correct nodes being a bit out of synch, the reward will converge to a correct amount.
     ///
-
-    macro_rules! hashmap {
-        ($( $key: expr => $val: expr ),*) => {{
-             let mut map = ::std::collections::HashMap::new();
-             $( let _ = map.insert($key, $val); )*
-             map
-        }}
-    }
 
     type Elder = FarmingSystem<StorageRewards>;
 
@@ -336,9 +334,10 @@ mod test {
         let previous_work = PreviousWork::new();
         let work_to_perform = WorkInfo::new();
 
-        let base_cost = 1;
+        let base_cost = 0;
         // 1. We have 7 Elders.
-        let mut elders: Vec<Elder> = (0..7).map(|i| get_instance(base_cost)).collect();
+        let num_elders = 7;
+        let mut elders: Vec<Elder> = (0..num_elders).map(|i| get_instance(base_cost)).collect();
 
         println!("Elders generated.");
 
@@ -354,23 +353,30 @@ mod test {
         println!("Accounts added.");
 
         // 2. We will issue n rewards.
-        let _ = elders
+        let total_reward_sum = elders
             .par_iter_mut()
             .map(|elder| {
-                for work_info in &work_to_perform.values {
-                    reward(elder, work_info.clone(), factor.value).unwrap();
-                }
+                (&work_to_perform.values)
+                    .into_iter()
+                    .map(|work_info| {
+                        reward(elder, work_info.clone(), factor.value)
+                            .unwrap()
+                            .as_nano()
+                    })
+                    .sum::<u64>()
+                    / num_elders as u64
             })
-            .collect::<Vec<_>>();
+            .sum::<u64>();
 
         println!("Rewards accumulated.");
 
-        // The original reward will be aggregated.
-        let total_reward: f64 = (&work_to_perform.values)
-            .into_iter()
-            .map(|(_, numbytes)| factor.value * (base_cost as f64 + numbytes.value as f64))
+        // The expected reward will be calculated.
+        let total_reward: u64 = (&work_to_perform.values)
+            .par_iter()
+            .map(|(_, numbytes)| (base_cost + numbytes.value) as f64)
+            .map(|work_cost| factor.value * work_cost)
+            .map(|tr| tr.round() as u64)
             .sum();
-        let total_reward = total_reward as u64;
         let total_work: u64 = (previous_work.values.len() as u64
             * work_to_perform.values.len() as u64)
             + previous_work.values.into_iter().sum::<u64>();
@@ -383,13 +389,27 @@ mod test {
         // and finally reach an agreement on a single counter value.
         for account in accounts {
             let counters: Vec<RewardCounter> = (&mut elders)
-                .iter_mut()
+                .par_iter_mut()
                 .map(|elder| elder.claim(account).unwrap())
                 .collect();
             let counters: RewardCounterSet = apply_byzantine_faults(counters).into();
             let agreed_counter: RewardCounter = counters.into();
             total_agreed_rewards = total_agreed_rewards + agreed_counter.reward.as_nano();
             total_agreed_work = total_agreed_work + agreed_counter.work;
+        }
+
+        // Comparing results
+        if total_reward_sum != total_reward {
+            println!(
+                "total_reward_sum: {}, total_reward: {}",
+                total_reward_sum, total_reward
+            );
+        }
+        if total_reward_sum != total_agreed_rewards {
+            println!(
+                "total_reward_sum: {}, total_agreed_rewards: {}",
+                total_reward_sum, total_agreed_rewards
+            );
         }
 
         let reward_diff_percent = 100.0 * diff(total_reward, total_agreed_rewards);
@@ -428,9 +448,9 @@ mod test {
         FarmingSystem::new(algo, acc)
     }
 
-    fn reward(instance: &mut Elder, data_info: (Hash, NumBytes), factor: f64) -> Result<()> {
+    fn reward(instance: &mut Elder, data_info: (Hash, NumBytes), factor: f64) -> Result<Money> {
         let (hash, num_bytes) = data_info;
-        instance.reward(hash.value, num_bytes.value as usize, factor)
+        instance.reward(hash.value, num_bytes.value, factor)
     }
 
     fn diff(one: u64, two: u64) -> f64 {
