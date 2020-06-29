@@ -17,8 +17,9 @@ use std::collections::HashMap;
 pub trait RewardAlgo {
     /// Set the base cost of work.
     fn set(&mut self, base_cost: Money);
-    /// Get the cost of work for the specified number of units.
-    fn work_cost(&self, work_units: u64) -> Money;
+    /// Get the cost of work for the specified number of reward units.
+    /// It can be simple, 1 RU == 1 unit of money (+ base cost). Or something else.
+    fn work_cost(&self, reward_units: u64) -> Money;
     /// Get the total reward implied by the work cost,
     /// as scaled by a factor representing a function of parameters
     /// relevant to the implementing layer.
@@ -39,12 +40,48 @@ pub struct StorageRewards {
 }
 
 impl StorageRewards {
-    ///
+    /// Passed in is the base cost
+    /// for buying a unit of work.
     pub fn new(base_cost: Money) -> Self {
         Self { base_cost }
     }
 }
 
+/// _Explanation_
+/// A unit of Work is defined as, and registered, based on what ever
+/// scheme the implementing layer decides.
+///
+/// New rewards are paid proportionally to Work performed.
+///
+/// _Implications of StorageRewards design_
+/// `StorageRewards` does not define Work, and thus what
+/// increases the participants registered Work.
+///
+/// It could be that `p.work += rewards[p.id]`
+/// it could also be that `p.work += 1` for everytime they get a(ny) reward.
+/// But it could actually be anything.
+///
+/// The current implementation in `accumulation.rs` uses `p.work += 1` for every reward received (any amount).
+/// The implications of this, is that no matter how small your reward is,
+/// your contribution is recorded as equal to any other. This means, that we are defining a `WorkUnit`
+/// as a measurement of `time participating`.
+/// In our context, that means that we decide how much the value of you storing
+/// `x bytes` is, depending on for how long you have been around doing that - relative to everyone else.
+///
+/// Receiving some data when new, is not as appreciated as after having been there relatively long.
+/// Because, after all, maybe you're just disappearing shortly, and introducing a lot of work to the others to
+/// replicate the data you were supposed to hold. Still though, it is rewarded higher to receive _more_ data,
+/// than less data, regardless of how new/old you are, which reflects in the total rewards being higher for more data.
+/// In other words: even though the newer participant's share is still smaller relatively to the others,
+/// it is higher absolutely, compared to if they'd all be receiving less data.
+///
+/// This is the rationale and reasoning behind `accumulation.rs` defining a `WorkUnit` as having received data (no matter how much).
+/// The `WorkUnit` is closely related to `NodeAge`, and is a way to capture the higher level design decision of
+/// rewards being proportional to `NodeAge`, while decoupling it from the actual implementation of `NodeAge` (which is low granular).
+///
+/// Another implementation of `RewardAlgo`, might want to use something else than `NodeAge`, and thus use another way
+/// to account for `Work`; another definition of a `WorkUnit`.
+///
 impl RewardAlgo for StorageRewards {
     /// Use this to update the base cost,
     /// as per any desired formula and frequency.
@@ -52,10 +89,10 @@ impl RewardAlgo for StorageRewards {
         self.base_cost = base_cost;
     }
 
-    /// Work units can for example be
+    /// Here, reward units are the
     /// number of bytes to store.
     fn work_cost(&self, num_bytes: u64) -> Money {
-        // 1 nano per work unit + base cost
+        // 1 nano + base cost per reward unit.
         Money::from_nano(num_bytes + self.base_cost.as_nano())
     }
 
