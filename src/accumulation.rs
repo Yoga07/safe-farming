@@ -163,7 +163,7 @@ mod test {
     }
 
     #[test]
-    fn when_data_is_already_rewarded_accumulation_is_rejected() -> Result<(), Error>{
+    fn when_data_is_already_rewarded_accumulation_is_rejected() -> Result<(), Error> {
         // --- Arrange ---
         let mut acc = Accumulation::new(Default::default(), Default::default());
         let account = get_random_pk();
@@ -172,8 +172,7 @@ mod test {
         let distribution = hashmap![account => reward];
 
         // Accumulate reward.
-        let reward = acc
-            .accumulate(data_hash.clone(), distribution.clone())?;
+        let reward = acc.accumulate(data_hash.clone(), distribution.clone())?;
         acc.apply(AccumulationEvent::RewardsAccumulated(reward));
 
         // --- Act ---
@@ -181,12 +180,15 @@ mod test {
 
         // --- Assert ---
         // .. confirm not successful.
-        assert_eq!(acc.accumulate(data_hash, distribution), Err(Error::DataExists));
+        assert_eq!(
+            acc.accumulate(data_hash, distribution),
+            Err(Error::DataExists)
+        );
         Ok(())
     }
 
     #[test]
-    fn when_account_has_reward_it_can_claim() -> Result<(), Error>{
+    fn when_account_has_reward_it_can_claim() -> Result<(), Error> {
         // --- Arrange ---
         let mut acc = Accumulation::new(Default::default(), Default::default());
         let account = get_random_pk();
@@ -199,10 +201,10 @@ mod test {
         // --- Act + Assert ---
         // Try claim, confirm account and amount is correct.
         let e = acc.claim(account)?;
-                assert!(e.account == account);
-                assert!(e.rewards.reward == reward);
-                acc.apply(AccumulationEvent::RewardsClaimed(e));
-                Ok(())
+        assert!(e.account == account);
+        assert!(e.rewards.reward == reward);
+        acc.apply(AccumulationEvent::RewardsClaimed(e));
+        Ok(())
     }
 
     #[test]
@@ -228,7 +230,7 @@ mod test {
         // --- Assert ---
         // .. confirm not successful.
         match result {
-            Ok(_) => assert!(false),
+            Ok(_) => panic!(),
             Err(err) => assert_eq!(err, Error::NoSuchKey),
         }
     }
@@ -243,7 +245,7 @@ mod test {
         // Try claim the account reward again, confirm not successful.
         let result = acc.claim(account);
         match result {
-            Ok(_) => assert!(false),
+            Ok(_) => panic!(),
             Err(err) => assert_eq!(err, Error::NoSuchKey),
         }
     }

@@ -7,7 +7,7 @@
 // permissions and limitations relating to use of the SAFE Network Software.
 
 use safe_nd::{AccountId, Money, Work};
-use std::collections::HashMap;
+use std::{cmp::Ordering, collections::HashMap};
 
 /// This algo allows for setting a base cost together with a
 /// cost proportional to some work, as measured by a minimum work unit.
@@ -104,6 +104,7 @@ impl RewardAlgo for StorageRewards {
         Money::from_nano(amount.round() as u64)
     }
 
+    #[allow(clippy::needless_range_loop)]
     /// Distribute the reward
     /// according to the accumulated work
     /// associated with the ids.
@@ -128,34 +129,38 @@ impl RewardAlgo for StorageRewards {
         }
 
         // Add/remove diff.
-        if total_reward > shares_sum {
-            // Does not cover probabilistic distribution
-            // (i.e. when total_reward < number of accounts),
-            // since we do not have a shared random value here.
-            // We could put it at the acc closest to the data hash though.. TBD
-            if !shares.is_empty() {
-                shares.sort_by_key(|t| t.1);
-                let index = 0; // for now, remainder goes to top worker
-                let (id, share) = shares[index];
-                let remainder = total_reward - shares_sum;
-                let new_share = share + remainder;
-                shares[index] = (id, new_share);
+        match total_reward.cmp(&shares_sum) {
+            Ordering::Greater => {
+                // Does not cover probabilistic distribution
+                // (i.e. when total_reward < number of accounts),
+                // since we do not have a shared random value here.
+                // We could put it at the acc closest to the data hash though.. TBD
+                if !shares.is_empty() {
+                    shares.sort_by_key(|t| t.1);
+                    let index = 0; // for now, remainder goes to top worker
+                    let (id, share) = shares[index];
+                    let remainder = total_reward - shares_sum;
+                    let new_share = share + remainder;
+                    shares[index] = (id, new_share);
+                }
             }
-        } else if shares_sum > total_reward {
-            let mut diff = shares_sum - total_reward;
-            shares.sort_by_key(|t| t.1);
-            while diff > 0 {
-                for i in 0..shares.len() {
-                    let (id, share) = shares[i];
-                    if 0 >= diff {
-                        break;
-                    } else if share >= 1 {
-                        shares[i] = (id, share - 1);
-                        diff -= 1;
+            Ordering::Less => {
+                let mut diff = shares_sum - total_reward;
+                shares.sort_by_key(|t| t.1);
+                while diff > 0 {
+                    for i in 0..shares.len() {
+                        let (id, share) = shares[i];
+                        if 0 == diff {
+                            break;
+                        } else if share >= 1 {
+                            shares[i] = (id, share - 1);
+                            diff -= 1;
+                        }
                     }
                 }
             }
-        }
+            Ordering::Equal => (),
+        };
 
         let shares_sum = (&shares).iter().map(|(_, share)| share).sum();
         if total_reward != shares_sum {
@@ -174,7 +179,6 @@ mod test {
     use safe_nd::{Money, PublicKey, Result};
     use threshold_crypto::SecretKey;
 
-
     fn get_random_pk() -> PublicKey {
         PublicKey::from(SecretKey::random().public_key())
     }
@@ -184,15 +188,15 @@ mod test {
         // 7 workers, with accumulated work of 1 to 7, shares 7!=28 nanos of reward.
         // This will result in each worker getting one nano per acc work unit.
         let calc = StorageRewards::new(Money::from_nano(0));
-        let accounts_work = (1..8).into_iter().map(|i| (get_random_pk(), i)).collect();
+        let accounts_work = (1..8).map(|i| (get_random_pk(), i)).collect();
         let mut dist: Vec<Money> = calc
             .distribute(Money::from_nano(28), accounts_work)
             .into_iter()
             .map(|(_, reward)| reward)
             .collect();
         dist.sort();
-        for i in 0..7 {
-            assert_eq!(dist[i].as_nano(), (i + 1) as u64);
+        for (i, amount) in dist.iter().enumerate().take(7) {
+            assert_eq!(amount.as_nano(), (i + 1) as u64);
         }
         Ok(())
     }

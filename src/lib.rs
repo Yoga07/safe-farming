@@ -115,12 +115,12 @@ mod test {
 
         // --- Act ---
         // Try accumulate.
-        let result = acc.accumulate(data_hash.clone(), distribution.clone());
+        let result = acc.accumulate(data_hash, distribution);
 
         // --- Assert ---
         // Confirm valid ..
         match result {
-            Err(_) => assert!(false),
+            Err(err) => panic!(err),
             Ok(e) => {
                 assert!(e.distribution.len() == 1);
                 assert!(e.distribution.contains_key(&account));

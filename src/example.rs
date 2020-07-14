@@ -30,7 +30,8 @@ impl<A: RewardAlgo> FarmingSystem<A> {
     /// the owner on the network.
     pub fn add_account(&mut self, id: AccountId, work: Work) -> Result<()> {
         let e = self.accumulation.add_account(id, work)?;
-        Ok(self.accumulation.apply(AccumulationEvent::AccountAdded(e)))
+        self.accumulation.apply(AccumulationEvent::AccountAdded(e));
+        Ok(())
     }
 
     /// Factor is a number > 0, by which reward will be increased or decreased.
@@ -150,16 +151,14 @@ mod test {
 
         // --- Act ---
         // Try accumulate.
-        let _ = system.add_account(account, work)?;
+        system.add_account(account, work)?;
         let _ = system.reward(data_hash, num_bytes, factor as f64)?;
 
         // --- Assert ---
         match system.claim(account) {
-            Err(_) => assert!(false),
+            Err(err) => panic!(err),
             Ok(e) => {
-                assert!(
-                    e.reward.as_nano() == factor * (num_bytes + base_cost.as_nano())
-                );
+                assert!(e.reward.as_nano() == factor * (num_bytes + base_cost.as_nano()));
                 assert!(e.work == work + 1); // being part of 1 reward occasion
             }
         }
@@ -177,15 +176,19 @@ mod test {
     /// our test results.
     #[test]
     fn test_position() {
+        let error = 0.000_000_001;
+
         let number = 0.00056_f64;
         let log10 = number.log10();
         let position = log10.floor();
-        assert_eq!(-4.0, position); // fourth decimal position
+        let expected: f64 = -4.0;
+        assert!((expected - position).abs() < error); // fourth decimal position
 
         let number = 5000.00056_f64;
         let log10 = number.log10();
         let position = log10.ceil();
-        assert_eq!(4.0, position); // fourth position of integers
+        let expected: f64 = 4.0;
+        assert!((expected - position).abs() < error); // fourth position of integers
     }
 
     /// Add results to buckets, assert that
@@ -243,6 +246,7 @@ mod test {
     // - 100% of the time, the deviance is less than 0.1 %.
     // - 50% of the time, the deviance is less than 0.01 %.
     fn find_distribution(num_cases: u64, outcomes: HashMap<isize, u64>) -> HashMap<isize, f64> {
+        let error = 0.0001;
         let mut diff_distribution = HashMap::new();
         for precision in (-10_isize..-1) {
             let mut max = 1.0; // 100 %
@@ -252,7 +256,7 @@ mod test {
                 let mid = min + (max - min) / 2.0;
                 let occurs_at_least_this_often =
                     occurs_at_least_this_often(&outcomes, num_cases, precision, mid);
-                if occurs_at_least_this_often && round(max, 2) == round(min, 2) {
+                if occurs_at_least_this_often && (round(max, 2) - round(min, 2)).abs() < error {
                     let _ = diff_distribution.insert(precision, round(mid, 2));
                     break;
                 } else if occurs_at_least_this_often {
@@ -260,7 +264,7 @@ mod test {
                 } else {
                     max = mid;
                 }
-                safety_break +=  1;
+                safety_break += 1;
                 if safety_break > 100 {
                     let _ = diff_distribution.insert(precision, round(mid, 2));
                     break;
@@ -306,6 +310,7 @@ mod test {
     }
 
     fn bft_rewards_quickcheck(factor: Factor) -> TestResult {
+        let error = 0.0001;
         match simulate_random_rewards_with_byzantine_faults(factor) {
             Ok(result) => {
                 // Assert that the difference is within tolerance levels.
@@ -314,9 +319,9 @@ mod test {
                 let decimals = 1;
                 let expected_diff = 0.0;
                 let acceptble_work_diff =
-                    expected_diff == round(result.work_diff_percent, decimals); // diff of work shall be less than 0.1 %
+                    (expected_diff - round(result.work_diff_percent, decimals)).abs() < error; // diff of work shall be less than 0.1 %
                 let acceptable_reward_diff =
-                    expected_diff == round(result.reward_diff_percent, decimals); // diff of reward shall be less than 0.1 %
+                    (expected_diff - round(result.reward_diff_percent, decimals)).abs() < error; // diff of reward shall be less than 0.1 %
 
                 if acceptble_work_diff && acceptable_reward_diff {
                     TestResult::passed()
@@ -459,8 +464,8 @@ mod test {
 
     fn round(value: f64, decimals: u8) -> f64 {
         let base: u64 = 10;
-        let tolerance = base.pow(decimals.into()) as f64;
-        (tolerance * value).round() / tolerance
+        let res = base.pow(decimals.into()) as f64;
+        (res * value).round() / res
     }
 
     // Four out of seven Elders will be correct/honest.
@@ -567,7 +572,7 @@ mod test {
                     (
                         Hash { value: hash },
                         NumBytes {
-                            value: rng.gen_range(3000, 1000001), // 3 kb (inclusive) to 1001 kb (exclusive)
+                            value: rng.gen_range(3000, 1_000_001), // 3 kb (inclusive) to 1001 kb (exclusive)
                         },
                     )
                 })
