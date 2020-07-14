@@ -93,7 +93,7 @@ pub struct RewardsClaimed {
 #[cfg(test)]
 mod test {
     use super::{Accumulation, AccumulationEvent};
-    use safe_nd::{Money, PublicKey};
+    use safe_nd::{Error, Money, PublicKey, Result};
     use threshold_crypto::SecretKey;
 
     macro_rules! hashmap {
@@ -105,7 +105,7 @@ mod test {
     }
 
     #[test]
-    fn when_data_was_not_previously_rewarded_reward_accumulates() {
+    fn when_data_was_not_previously_rewarded_reward_accumulates() -> Result<()> {
         // --- Arrange ---
         let mut acc = Accumulation::new(Default::default(), Default::default());
         let account = get_random_pk();
@@ -115,24 +115,21 @@ mod test {
 
         // --- Act ---
         // Try accumulate.
-        let result = acc.accumulate(data_hash, distribution);
+        let e = acc.accumulate(data_hash, distribution)?;
 
         // --- Assert ---
         // Confirm valid ..
-        match result {
-            Err(err) => panic!(err),
-            Ok(e) => {
-                assert!(e.distribution.len() == 1);
-                assert!(e.distribution.contains_key(&account));
-                assert_eq!(&reward, e.distribution.get(&account).unwrap());
-                acc.apply(AccumulationEvent::RewardsAccumulated(e));
-            }
-        }
+        assert!(e.distribution.len() == 1);
+        assert!(e.distribution.contains_key(&account));
+        assert_eq!(&reward, e.distribution.get(&account).unwrap());
+        acc.apply(AccumulationEvent::RewardsAccumulated(e));
+
         // .. and successful.
         match acc.get(&account) {
-            None => todo!(),
+            None => return Err(Error::NoSuchKey),
             Some(accumulated) => assert_eq!(accumulated.reward, reward),
-        }
+        };
+        Ok(())
     }
 
     fn get_random_pk() -> PublicKey {
