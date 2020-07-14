@@ -133,7 +133,7 @@ impl RewardAlgo for StorageRewards {
             // (i.e. when total_reward < number of accounts),
             // since we do not have a shared random value here.
             // We could put it at the acc closest to the data hash though.. TBD
-            if shares.is_empty() {
+            if !shares.is_empty() {
                 shares.sort_by_key(|t| t.1);
                 let index = 0; // for now, remainder goes to top worker
                 let (id, share) = shares[index];
@@ -151,7 +151,7 @@ impl RewardAlgo for StorageRewards {
                         break;
                     } else if share >= 1 {
                         shares[i] = (id, share - 1);
-                        diff = diff - 1;
+                        diff -= 1;
                     }
                 }
             }
