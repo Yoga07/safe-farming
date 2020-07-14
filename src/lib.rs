@@ -90,9 +90,10 @@ pub struct RewardsClaimed {
     pub rewards: RewardCounter,
 }
 
+#[cfg(test)]
 mod test {
     use super::{Accumulation, AccumulationEvent};
-    use safe_nd::{AccountId, Error, Money, PublicKey};
+    use safe_nd::{Money, PublicKey};
     use threshold_crypto::SecretKey;
 
     macro_rules! hashmap {

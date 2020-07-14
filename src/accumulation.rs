@@ -19,6 +19,7 @@ pub struct Accumulation {
     accumulated: HashMap<AccountId, RewardCounter>,
 }
 
+/// Identification type
 pub type Id = Vec<u8>;
 
 impl Accumulation {
@@ -121,10 +122,10 @@ impl Accumulation {
         }
     }
 }
-
+#[cfg(test)]
 mod test {
     use super::{Accumulation, AccumulationEvent};
-    use safe_nd::{AccountId, Error, Money, PublicKey};
+    use safe_nd::{Error, Money, PublicKey};
     use threshold_crypto::SecretKey;
 
     macro_rules! hashmap {

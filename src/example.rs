@@ -68,7 +68,7 @@ impl<A: RewardAlgo> FarmingSystem<A> {
         let accounts_work: HashMap<AccountId, Work> = self
             .accumulation
             .get_all()
-            .into_iter()
+            .iter()
             .map(|(id, acc)| (*id, acc.work))
             .collect();
         // calculate the work cost for the number of bytes to store
@@ -144,21 +144,21 @@ mod test {
         let account = get_random_pk();
         let data_hash = vec![1, 2, 3];
 
-        let num_bytes = 3;
-        let factor = 2.0; // i.e. we say here that the reward is 2x StoreCost (where, in our context, half is contributed by the network).
+        let num_bytes = 3u64;
+        let factor = 2u64; // i.e. we say here that the reward is 2x StoreCost (where, in our context, half is contributed by the network).
         let work = 1; // starts at minimum 1
 
         // --- Act ---
         // Try accumulate.
         let _ = system.add_account(account, work)?;
-        let _ = system.reward(data_hash, num_bytes, factor)?;
+        let _ = system.reward(data_hash, num_bytes, factor as f64)?;
 
         // --- Assert ---
         match system.claim(account) {
             Err(_) => assert!(false),
             Ok(e) => {
                 assert!(
-                    e.reward.as_nano() == factor as u64 * (num_bytes as u64 + base_cost.as_nano())
+                    e.reward.as_nano() == factor * (num_bytes + base_cost.as_nano())
                 );
                 assert!(e.work == work + 1); // being part of 1 reward occasion
             }
@@ -212,7 +212,7 @@ mod test {
         println!("---");
         println!("Work diff distribution:");
         print_distribution(work_diff_distribution);
-        println!("");
+        println!();
         println!("Reward diff distribution:");
         print_distribution(reward_diff_distribution);
         println!("---");
@@ -260,7 +260,7 @@ mod test {
                 } else {
                     max = mid;
                 }
-                safety_break = safety_break + 1;
+                safety_break +=  1;
                 if safety_break > 100 {
                     let _ = diff_distribution.insert(precision, round(mid, 2));
                     break;
@@ -297,7 +297,7 @@ mod test {
         percent_of_the_cases: f64,
     ) -> bool {
         let sum_of_outcomes = outcomes
-            .into_iter()
+            .iter()
             .filter(|(p, _)| *p <= &precision)
             .map(|(_, count)| count)
             .sum::<u64>() as f64;
@@ -357,7 +357,7 @@ mod test {
             .par_iter_mut()
             .map(|elder| {
                 (&work_to_perform.values)
-                    .into_iter()
+                    .iter()
                     .map(|work_info| {
                         reward(elder, work_info.clone(), factor.value)
                             .unwrap()
@@ -394,8 +394,8 @@ mod test {
                 .collect();
             let counters: RewardCounterSet = apply_byzantine_faults(counters).into();
             let agreed_counter: RewardCounter = counters.into();
-            total_agreed_rewards = total_agreed_rewards + agreed_counter.reward.as_nano();
-            total_agreed_work = total_agreed_work + agreed_counter.work;
+            total_agreed_rewards += agreed_counter.reward.as_nano();
+            total_agreed_work += agreed_counter.work;
         }
 
         // Comparing results

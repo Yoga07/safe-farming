@@ -133,7 +133,7 @@ impl RewardAlgo for StorageRewards {
             // (i.e. when total_reward < number of accounts),
             // since we do not have a shared random value here.
             // We could put it at the acc closest to the data hash though.. TBD
-            if shares.len() > 0 {
+            if shares.is_empty() {
                 shares.sort_by_key(|t| t.1);
                 let index = 0; // for now, remainder goes to top worker
                 let (id, share) = shares[index];
@@ -157,7 +157,7 @@ impl RewardAlgo for StorageRewards {
             }
         }
 
-        let shares_sum = (&shares).into_iter().map(|(_, share)| share).sum();
+        let shares_sum = (&shares).iter().map(|(_, share)| share).sum();
         if total_reward != shares_sum {
             panic!("total_reward: {}, shares_sum: {}", total_reward, shares_sum);
         }
@@ -168,20 +168,12 @@ impl RewardAlgo for StorageRewards {
             .collect()
     }
 }
-
+#[cfg(test)]
 mod test {
     use super::*;
     use safe_nd::{Money, PublicKey, Result};
-    use std::collections::{HashMap, HashSet};
     use threshold_crypto::SecretKey;
 
-    macro_rules! hashmap {
-        ($( $key: expr => $val: expr ),*) => {{
-             let mut map = HashMap::new();
-             $( let _ = map.insert($key, $val); )*
-             map
-        }}
-    }
 
     fn get_random_pk() -> PublicKey {
         PublicKey::from(SecretKey::random().public_key())
