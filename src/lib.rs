@@ -130,7 +130,7 @@ mod test {
         }
         // .. and successful.
         match acc.get(&account) {
-            None => assert!(false),
+            None => todo!(),
             Some(accumulated) => assert_eq!(accumulated.reward, reward),
         }
     }

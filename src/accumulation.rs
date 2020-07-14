@@ -137,7 +137,7 @@ mod test {
     }
 
     #[test]
-    fn when_data_was_not_previously_rewarded_reward_accumulates() {
+    fn when_data_was_not_previously_rewarded_reward_accumulates() -> Result<(), Error> {
         // --- Arrange ---
         let mut acc = Accumulation::new(Default::default(), Default::default());
         let account = get_random_pk();
@@ -147,28 +147,23 @@ mod test {
 
         // --- Act ---
         // Try accumulate.
-        let result = acc.accumulate(data_hash.clone(), distribution.clone());
+        let e = acc.accumulate(data_hash, distribution)?;
 
         // --- Assert ---
         // Confirm valid ..
-        match result {
-            Err(_) => assert!(false),
-            Ok(e) => {
-                assert!(e.distribution.len() == 1);
-                assert!(e.distribution.contains_key(&account));
-                assert_eq!(&reward, e.distribution.get(&account).unwrap());
-                acc.apply(AccumulationEvent::RewardsAccumulated(e));
-            }
-        }
+        assert!(e.distribution.len() == 1);
+        assert!(e.distribution.contains_key(&account));
+        assert_eq!(&reward, e.distribution.get(&account).unwrap());
+        acc.apply(AccumulationEvent::RewardsAccumulated(e));
         // .. and successful.
-        match acc.get(&account) {
-            None => assert!(false),
-            Some(accumulated) => assert_eq!(accumulated.reward, reward),
+        if let Some(accumulated) = acc.get(&account) {
+            assert_eq!(accumulated.reward, reward);
         }
+        Ok(())
     }
 
     #[test]
-    fn when_data_is_already_rewarded_accumulation_is_rejected() {
+    fn when_data_is_already_rewarded_accumulation_is_rejected() -> Result<(), Error>{
         // --- Arrange ---
         let mut acc = Accumulation::new(Default::default(), Default::default());
         let account = get_random_pk();
@@ -178,46 +173,36 @@ mod test {
 
         // Accumulate reward.
         let reward = acc
-            .accumulate(data_hash.clone(), distribution.clone())
-            .unwrap();
+            .accumulate(data_hash.clone(), distribution.clone())?;
         acc.apply(AccumulationEvent::RewardsAccumulated(reward));
 
         // --- Act ---
         // Try same data hash again ..
-        let result = acc.accumulate(data_hash, distribution);
 
         // --- Assert ---
         // .. confirm not successful.
-        match result {
-            Ok(_) => assert!(false),
-            Err(err) => assert_eq!(err, Error::DataExists),
-        }
+        assert_eq!(acc.accumulate(data_hash, distribution), Err(Error::DataExists));
+        Ok(())
     }
 
     #[test]
-    fn when_account_has_reward_it_can_claim() {
+    fn when_account_has_reward_it_can_claim() -> Result<(), Error>{
         // --- Arrange ---
         let mut acc = Accumulation::new(Default::default(), Default::default());
         let account = get_random_pk();
         let data_hash = vec![1, 2, 3];
         let reward = Money::from_nano(10);
         let distribution = hashmap![account => reward];
-        let accumulation = acc
-            .accumulate(data_hash.clone(), distribution.clone())
-            .unwrap();
+        let accumulation = acc.accumulate(data_hash, distribution)?;
         acc.apply(AccumulationEvent::RewardsAccumulated(accumulation));
 
         // --- Act + Assert ---
         // Try claim, confirm account and amount is correct.
-        let result = acc.claim(account);
-        match result {
-            Err(_) => assert!(false),
-            Ok(e) => {
+        let e = acc.claim(account)?;
                 assert!(e.account == account);
                 assert!(e.rewards.reward == reward);
                 acc.apply(AccumulationEvent::RewardsClaimed(e));
-            }
-        }
+                Ok(())
     }
 
     #[test]
