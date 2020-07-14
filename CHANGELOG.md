@@ -1,4 +1,4 @@
-# safe-ecoonomy - Change Log
+# safe-farming - Change Log
 
 ## [0.1.0]
 
