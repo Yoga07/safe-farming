@@ -6,9 +6,7 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-use super::Work;
-use rand::distributions::{uniform::Uniform as Range, Distribution};
-use safe_nd::{AccountId, Money};
+use safe_nd::{AccountId, Money, Work};
 use std::collections::HashMap;
 
 /// This algo allows for setting a base cost together with a

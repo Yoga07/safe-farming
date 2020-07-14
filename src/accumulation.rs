@@ -6,11 +6,8 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-use super::{
-    AccountAdded, AccountId, AccumulationEvent, RewardCounter, RewardsAccumulated, RewardsClaimed,
-    Work,
-};
-use safe_nd::{Error, Money, Result};
+use super::{AccountAdded, AccountId, AccumulationEvent, RewardsAccumulated, RewardsClaimed};
+use safe_nd::{Error, Money, Result, RewardCounter, Work};
 use std::collections::{HashMap, HashSet};
 
 /// The book keeping of rewards.

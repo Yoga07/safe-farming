@@ -6,8 +6,7 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-use super::RewardCounter;
-use safe_nd::Money;
+use safe_nd::{Money, RewardCounter};
 
 /// A util for calculating the median
 /// of a vec of RewardCounters.

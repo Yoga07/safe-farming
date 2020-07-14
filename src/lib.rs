@@ -34,7 +34,7 @@ pub use crate::{
     calculation::{RewardAlgo, StorageRewards},
     utils::RewardCounterSet,
 };
-use safe_nd::{AccountId, Money};
+use safe_nd::{AccountId, Money, RewardCounter, Work};
 use std::collections::HashMap;
 
 ///
@@ -46,47 +46,6 @@ pub mod calculation;
 pub mod utils;
 
 mod example;
-
-/// The representation of the smallest unit of work.
-/// This is strictly incrementing (i.e. accumulated)
-/// during the network lifetime of the worker.
-pub type Work = u64;
-
-///
-#[derive(Clone, Eq, PartialEq, PartialOrd, Debug, Ord)]
-pub struct RewardCounter {
-    /// Accumulated rewards.
-    /// This is reset every time the
-    /// reward is paid out to the worker.
-    pub reward: Money,
-    /// Accumulated work.
-    /// This is strictly incrementing during
-    /// the network lifetime of the worker.
-    pub work: Work,
-}
-
-impl RewardCounter {
-    ///
-    pub fn add(&self, reward: Money) -> Option<Self> {
-        let sum = match self.reward.checked_add(reward) {
-            Some(s) => s,
-            None => return None,
-        };
-        Some(Self {
-            work: self.work + 1,
-            reward: sum,
-        })
-    }
-}
-
-impl Default for RewardCounter {
-    fn default() -> Self {
-        Self {
-            work: 0,
-            reward: Money::zero(),
-        }
-    }
-}
 
 ///
 #[derive(Clone, Eq, PartialEq, Debug)]

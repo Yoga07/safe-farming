@@ -6,8 +6,8 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-use super::{calculation::*, AccountId, Accumulation, AccumulationEvent, RewardCounter, Work};
-use safe_nd::Result;
+use super::{calculation::*, AccountId, Accumulation, AccumulationEvent};
+use safe_nd::{Result, RewardCounter, Work};
 use std::collections::HashMap;
 
 struct FarmingSystem<A: RewardAlgo> {
