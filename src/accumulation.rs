@@ -229,10 +229,7 @@ mod test {
 
         // --- Assert ---
         // .. confirm not successful.
-        match result {
-            Ok(_) => panic!(),
-            Err(err) => assert_eq!(err, Error::NoSuchKey),
-        }
+        assert_eq!(result, Err(Error::NoSuchKey))
     }
 
     #[test]
