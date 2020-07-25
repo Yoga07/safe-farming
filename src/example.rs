@@ -370,7 +370,7 @@ mod test {
                             .as_nano()
                     })
                     .sum::<u64>()
-                    / num_elders as u64
+                    / num_elders
             })
             .sum::<u64>();
 
@@ -398,8 +398,9 @@ mod test {
                 .par_iter_mut()
                 .map(|elder| elder.claim(account).unwrap())
                 .collect();
-            let counters: RewardCounterSet = apply_byzantine_faults(counters).into();
-            let agreed_counter: RewardCounter = counters.into();
+            let counters =
+                RewardCounterSet::new(num_elders as usize, apply_byzantine_faults(counters))?;
+            let agreed_counter = counters.agreed_value().unwrap();
             total_agreed_rewards += agreed_counter.reward.as_nano();
             total_agreed_work += agreed_counter.work;
         }
