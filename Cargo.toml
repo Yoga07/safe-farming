@@ -10,13 +10,13 @@ readme = "README.md"
 repository = "https://github.com/maidsafe/safe-farming"
 version = "0.1.0"
 
-# [patch.crates-io]
-# safe-nd =  { git = "https://github.com/oetyng/safe-nd.git", rev = "2c16b8c" }
+[patch.crates-io]
+safe-nd = { git = "https://github.com/maidsafe/safe-nd.git", branch = "farming" }
 
 [dependencies]
 # # Ensure bincode version is identical to that in SAFE Client Libs and SAFE Network Data.
 bincode = "=1.2.1"
-safe-nd = { git = "https://github.com/oetyng/safe-nd.git", branch = "messaging_refactor" }
+safe-nd = { git = "https://github.com/maidsafe/safe-nd.git", branch = "farming" }
 serde = { version = "~1.0.97", features = ["derive"] }
 crdts = "4.1.0"
 threshold_crypto = "~0.3.2"
