@@ -19,7 +19,7 @@ bincode = "=1.2.1"
 safe-nd = { git = "https://github.com/maidsafe/safe-nd.git", branch = "farming" }
 serde = { version = "~1.0.97", features = ["derive"] }
 crdts = "4.1.0"
-threshold_crypto = "~0.3.2"
+threshold_crypto = "~0.4.0"
 rand = "~0.7.3"
 rayon = "1.3.1"
 
